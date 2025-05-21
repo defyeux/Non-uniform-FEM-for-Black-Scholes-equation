@@ -1,0 +1,90 @@
+clc; clear;
+
+sigma = 0.2;
+r = 0.03;
+E = 100;
+T = 1;
+
+
+nE = 100;
+sz = 2 * nE + 1;
+S1 = 0.5 * E; S2 = 5 * E;
+x1 = log(S1 / E); x2 = log(S2 / E);
+x = linspace(x1, x2, nE + 1);
+x_ref = linspace(x1, x2, sz);
+dx = (x2 - x1) / nE;
+
+Nt = 100;
+t = linspace(0, T, Nt + 1);
+dt = T / Nt;
+
+V = zeros(sz, Nt + 1);
+
+%% Initial conditon and boundary
+
+V(:, 1) = ( max(E * exp(x_ref) - E, 0)  )';
+
+V_0 = max(S1 - E, 0);
+V_N = max(S2 - E, 0); 
+
+V(1, :) = V_0 * ones(1, Nt + 1);
+V(sz, :) = V_N * ones(1, Nt + 1);
+
+%% Matrix
+
+        K = diag(16 * (mod(1:sz, 2) == 0)) + diag(14 * (mod(1:sz, 2) == 1)) + diag(-8 * ones(1, sz - 1), -1) + diag(-8 * ones(1, sz - 1), 1) + diag(mod(1:sz - 2, 2) == 1, -2) + diag(mod(1:sz - 2, 2) == 1, 2);
+        K(1, 1) = 7; K(sz, sz) = 7;
+        K = K / (-3 * dx);
+
+        M = diag(16 * (mod(1:sz, 2) == 0)) + diag(8 * (mod(1:sz, 2) == 1)) + diag(2 * ones(1, sz - 1), -1) + diag(2 * ones(1, sz - 1), 1) + diag(-(mod(1:sz - 2, 2) == 1), -2) + diag(-(mod(1:sz - 2, 2) == 1), 2);
+        M(1, 1) = 4; M(sz, sz) = 4;
+        M = dx / 30 * M;
+
+        N = diag(-4 * ones(1, sz - 1), 1) + diag(4 * ones(1, sz - 1), -1) + diag(-(mod(1:sz - 2, 2) == 1), -2) + diag(mod(1:sz - 2, 2) == 1, 2);
+        N(1, 1) = -3; N(sz, sz) = 3;
+        N = N / 6;
+%%  Vectors of boundary condition
+     
+b_K = zeros(sz - 2, 1);
+b_M = zeros(sz - 2, 1);
+b_N = zeros(sz - 2, 1);
+
+
+b_K(1) = K(2, 1) * V_0;
+b_K(2) = K(3, 1) * V_0;
+b_K(end - 1) = K(end - 2, end) * V_N;
+b_K(end) = K(end - 1, end) * V_N;
+
+b_M(1) = M(2, 1) * V_0;
+b_M(2) = M(3, 1) * V_0;
+b_M(end - 1) = M(end - 2, end) * V_N;
+b_M(end) = M(end - 1, end) * V_N;
+
+b_N(1) = N(2, 1) * V_0;
+b_N(2) = N(3, 1) * V_0;
+b_N(end - 1) = N(end - 2, end) * V_N;
+b_N(end) = N(end - 1, end) * V_N;
+
+theta = 0.5;
+
+%% Matrix (continue)
+K = K(2:end - 1, 2:end - 1);
+M = M(2:end - 1, 2:end - 1);
+N = N(2:end - 1, 2:end - 1);
+
+A = 0.5 * sigma^2 * K + (r - 0.5 * sigma^2) * N - r * M;
+Q1 = M - dt * theta * A;
+Q2 = M + dt * (1 - theta) * A;
+
+%% Boundary conditions (continue)
+
+b = 0.5 * sigma^2 * b_K + (r - 0.5 * sigma^2) * b_N - r * b_M;
+
+for k = 1:Nt
+    l = Q2 * V(2:sz - 1, k) + dt * b;
+    V(2:sz - 1, k + 1) = Q1 \ l;
+end
+
+S = E * exp(x_ref);
+[X, Y] = meshgrid(S, t);
+surf(X, Y, V');
